@@ -7,6 +7,7 @@ import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 import com.microsoft.playwright.options.AriaRole;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -17,6 +18,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+@Slf4j
 @Service
 public class GazprombankDepositScraper implements DepositScraper {
 
@@ -30,14 +32,25 @@ public class GazprombankDepositScraper implements DepositScraper {
 
     @Override
     public ScrapedDepositRecord scrapeDeposit() {
+        log.debug("scrapeDeposit()");
+
         ScrapedDepositRecord scrapedDepositRecord;
 
         try (Playwright playwright = Playwright.create()) {
+            log.debug("Playwright.create()");
+
             BrowserType.LaunchOptions launchOptions = new BrowserType.LaunchOptions().setSlowMo(SLOW_MOTION_DELAY);
 
             try (Browser browser = playwright.chromium().launch(launchOptions)) {
+                log.debug("playwright.chromium().launch()");
+
                 BrowserContext context = browser.newContext();
                 Page page = context.newPage();
+
+                log.debug("page.setDefaultTimeout(180_000)");
+                page.setDefaultTimeout(180_000);
+
+                log.debug("page.navigate(DEPOSIT_URL) [" + DEPOSIT_URL + "]");
                 page.navigate(DEPOSIT_URL);
 
                 String depositTitle = scrapeDepositTitle(page);
@@ -80,6 +93,8 @@ public class GazprombankDepositScraper implements DepositScraper {
     }
 
     private String scrapeDepositTitle(Page page) {
+        log.debug("scrapeDepositTitle()");
+
         return page.locator("//div[@class='title_banner_product__info-83e']")
                 .filter(new Locator.FilterOptions().setHas(page.getByRole(AriaRole.HEADING)))
                 .innerText()
@@ -91,6 +106,8 @@ public class GazprombankDepositScraper implements DepositScraper {
             GazprombankDepositRatesOffer offerToClient,
             GazprombankDepositCapitalization capitalization
     ) {
+        log.debug("scrapeDepositRates()");
+
         page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName("Процентные ставки")).click();
         page.getByRole(AriaRole.BUTTON, new Page.GetByRoleOptions().setName(offerToClient.type)).click();
 
@@ -122,29 +139,39 @@ public class GazprombankDepositScraper implements DepositScraper {
     }
 
     private List<Integer> parseTermsRow(String termsRow) {
+        log.debug("parseTermsRow() [" + termsRow + "]");
+
         String[] termsRowSplit = termsRow.split("\\t");
         String[] termsCells = Arrays.copyOfRange(termsRowSplit, 1, termsRowSplit.length);
         return getTermsInMonths(parseTermsInDays(termsCells));
     }
 
     private List<Double> parseRatesRow(String ratesRow) {
+        log.debug("parseRatesRow() [" + ratesRow + "]");
+
         String[] ratesRowSplit = ratesRow.split("\\t");
         String[] ratesCells = Arrays.copyOfRange(ratesRowSplit, 1, ratesRowSplit.length);
         return parseRates(ratesCells);
     }
 
     private Integer parseRatesRowAmountMin(String ratesRow) {
+        log.debug("parseRatesRowAmountMin() [" + ratesRow + "]");
+
         String[] ratesRowSplit = ratesRow.split("\\t");
         return parseAmountMin(ratesRowSplit[0]);
     }
 
     private Integer parseAmountMin(String amountMin) {
+        log.debug("parseAmountMin() [" + amountMin + "]");
+
         return amountMin.contains("от") && amountMin.contains("₽")
                 ? parseInteger(amountMin)
                 : null;
     }
 
     private List<Integer> parseTermsInDays(String[] termsInDays) {
+        log.debug("parseTermsInDays() [" + Arrays.toString(termsInDays) + "]");
+
         return Arrays.stream(termsInDays)
                 .filter(t -> t.contains("день") || t.contains("дней"))
                 .map(this::parseTerm)
@@ -152,16 +179,22 @@ public class GazprombankDepositScraper implements DepositScraper {
     }
 
     private List<Integer> getTermsInMonths(List<Integer> termsInDays) {
+        log.debug("getTermsInMonths() [" + termsInDays + "]");
+
         return termsInDays.stream()
                 .map(t -> (int) (t / DAYS_TO_MONTHS_CONVERSION_CONSTANT))
                 .collect(Collectors.toList());
     }
 
     private Integer parseTerm(String term) {
+        log.debug("parseTerm() [" + term + "]");
+
         return parseInteger(term);
     }
 
     private Integer parseInteger(String s) {
+        log.debug("parseInteger() [" + s + "]");
+
         String replaced = s.replaceAll("[^0-9]", "");
         return replaced.isEmpty()
                 ? null
@@ -169,6 +202,8 @@ public class GazprombankDepositScraper implements DepositScraper {
     }
 
     private List<Double> parseRates(String[] rates) {
+        log.debug("parseRates() [" + Arrays.toString(rates) + "]");
+
         return Arrays.stream(rates)
                 .filter(r -> r.contains("%"))
                 .map(this::parseRate)
@@ -176,6 +211,8 @@ public class GazprombankDepositScraper implements DepositScraper {
     }
 
     private Double parseRate(String rate) {
+        log.debug("parseRate() [" + rate + "]");
+
         String replaced = rate.replaceAll("[^0-9.]", "");
         return replaced.isEmpty()
                 ? null
